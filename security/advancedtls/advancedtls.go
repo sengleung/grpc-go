@@ -296,8 +296,8 @@ func (o *ServerOptions) config(config *tls.Config) (*tls.Config, error) {
 	if o.IdentityOptions.GetIdentityCertificatesForClient != nil {
 		return nil, fmt.Errorf("GetIdentityCertificatesForClient cannot be specified on the server side")
 	}
-	clientAuth := tls.NoClientCert
-	if o.RequireClientCert {
+	clientAuth := config.ClientAuth
+	if o.RequireClientCert && clientAuth != tls.RequireAndVerifyClientCert {
 		// We have to set clientAuth to RequireAnyClientCert to force underlying
 		// TLS package to use the verification function we built from
 		// buildVerifyFunc.
