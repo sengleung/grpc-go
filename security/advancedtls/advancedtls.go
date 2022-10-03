@@ -278,7 +278,10 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 	return config, nil
 }
 
-func (o *ServerOptions) config() (*tls.Config, error) {
+func (o *ServerOptions) config(config *tls.Config) (*tls.Config, error) {
+	if config == nil {
+		config = &tls.Config{}
+	}
 	if o.RequireClientCert && o.VType == SkipVerification && o.VerifyPeer == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
@@ -300,9 +303,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
 	}
-	config := &tls.Config{
-		ClientAuth: clientAuth,
-	}
+	config.ClientAuth = clientAuth
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
 	case o.RootOptions.RootCACerts != nil:
@@ -559,8 +560,8 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 
 // NewServerCreds uses ServerOptions to construct a TransportCredentials based
 // on TLS.
-func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) {
-	conf, err := o.config()
+func NewServerCreds(o *ServerOptions, config *tls.Config) (credentials.TransportCredentials, error) {
+	conf, err := o.config(config)
 	if err != nil {
 		return nil, err
 	}
