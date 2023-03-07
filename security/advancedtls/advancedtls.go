@@ -415,8 +415,7 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 }
 
 func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	cfg := credinternal.CloneTLSConfig(c.config)
-	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn)
+	cfg := c.cloneServerTLSConfig(rawConn)
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
 		conn.Close()
@@ -430,6 +429,12 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 	}
 	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
 	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
+}
+
+func (c *advancedTLSCreds) cloneServerTLSConfig(rawConn net.Conn) *tls.Config {
+	cfg := credinternal.CloneTLSConfig(c.config)
+	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn)
+	return cfg
 }
 
 func (c *advancedTLSCreds) Clone() credentials.TransportCredentials {
@@ -574,5 +579,17 @@ func NewServerCreds(o *ServerOptions, config *tls.Config) (credentials.Transport
 		revocationConfig: o.RevocationConfig,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
+	// Dynamically reload server root certificates for the verification check in crypto/tls.
+	if o.RootOptions.RootProvider != nil {
+		tc.config.GetConfigForClient = func(chi *tls.ClientHelloInfo) (*tls.Config, error) {
+			cfg := tc.cloneServerTLSConfig(chi.Conn)
+			getRootCAsResults, err := tc.getRootCAs(nil)
+			if err != nil {
+				return nil, err
+			}
+			cfg.ClientCAs = getRootCAsResults.TrustCerts
+			return cfg, nil
+		}
+	}
 	return tc, nil
 }
